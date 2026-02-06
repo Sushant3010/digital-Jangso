@@ -1,20 +1,20 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { createClient } from '@supabase/supabase-js';
 import { myItems as initialItems, LibraryItem } from './data';
-import LoginGate from './LoginGate'; // Import your new file
+import LoginGate from './LoginGate';
 
-// --- DATABASE CONFIG ---
-const SUPABASE_URL = 'https://xtdonsoyceshoqphvipt.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_Ncal4Gq8D7e2jgQQNFHvGw_0ji8deji';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const categoryLogos: Record<string, string> = {
-    "To Cook": "https://api.deepai.org/job-view-file/42992a44-6ba7-45e8-91a3-8bf7560d44e9/outputs/output.jpg",
-    "To Watch": "https://api.deepai.org/job-view-file/22b21d47-2b04-4901-bd57-31b3511f8f7e/outputs/output.jpg",
-    "To Visit": "https://api.deepai.org/job-view-file/c92a74f2-b43a-42d5-a3eb-3d5291248c27/outputs/output.jpg",
-    "To Read": "https://api.deepai.org/job-view-file/8a0a9916-26a7-4806-99db-bef2cdcbb839/outputs/output.jpg",
-    "To Listen": "https://api.deepai.org/job-view-file/e2a2edc7-1909-48b6-924a-cf236c20ca9d/outputs/output.jpg",
-    "Default": "PASTE_A_GENERAL_LOGO_LINK_HERE"
+    "To Cook": "https://images.unsplash.com/photo-1556910103-1c02745aae4d?q=80&w=400",
+    "To Watch": "https://images.unsplash.com/photo-1524712245354-2c4e5e7121c0?q=80&w=400",
+    "To Visit": "https://images.unsplash.com/photo-1503220317375-aaad61436b1b?q=80&w=400",
+    "To Read": "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?q=80&w=400",
+    "To Listen": "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=400",
+    "Default": "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?q=80&w=400",
 };
 
 export default function Home() {
@@ -35,32 +35,35 @@ export default function Home() {
         note: ''
     });
 
-    // Handle initial lock state and Evening Mode
-    useEffect(() => {
-        const unlocked = sessionStorage.getItem('jangso_unlocked') === 'true';
-        setIsUnlocked(unlocked);
-
-        const hour = new Date().getHours();
-        if (hour >= 19 || hour <= 7) setIsEvening(true);
-
-        if (unlocked) fetchItems();
-    }, []);
-
-    const fetchItems = async () => {
+    // Wrapped in useCallback to prevent unnecessary re-renders
+    const fetchItems = useCallback(async () => {
         const { data } = await supabase
             .from('library_items')
             .select('*')
             .order('created_at', { ascending: false });
 
-        const dbItems = data ? data.map(i => ({ ...i, imageUrl: i.image_url })) : [];
+        const dbItems = data ? data.map(i => ({
+            ...i,
+            imageUrl: i.image_url // Map DB snake_case to your camelCase
+        })) : [];
 
-        // MERGE: Put DB items first, followed by your hardcoded initialItems
         setItems([...dbItems, ...initialItems]);
-    };
+    }, []);
+
+    useEffect(() => {
+        const unlocked = sessionStorage.getItem('jangso_unlocked') === 'true';
+        if (unlocked) {
+            setIsUnlocked(true);
+            fetchItems();
+        }
+
+        const hour = new Date().getHours();
+        if (hour >= 19 || hour <= 7) setIsEvening(true);
+    }, [fetchItems]);
 
     const handleUnlock = () => {
-        setIsUnlocked(true);
         sessionStorage.setItem('jangso_unlocked', 'true');
+        setIsUnlocked(true);
         fetchItems();
     };
 
@@ -81,15 +84,13 @@ export default function Home() {
             title: newItem.title,
             category: newItem.category,
             link: newItem.link,
-            image_url: newItem.imageUrl,
+            image_url: newItem.imageUrl, // Send to DB
             note: newItem.note
         }]).select();
 
         if (data) {
             const addedItem = { ...data[0], imageUrl: data[0].image_url };
-            // Update state by keeping the previous items (which includes initialItems)
             setItems(prevItems => [addedItem, ...prevItems]);
-
             triggerHearts();
             setTimeout(() => setIsFormOpen(false), 400);
             setNewItem({ title: '', category: 'To Watch', link: '', imageUrl: '', note: '' });
@@ -99,13 +100,10 @@ export default function Home() {
     const deleteItem = async (e: React.MouseEvent, id: number) => {
         e.preventDefault(); e.stopPropagation();
         const { error } = await supabase.from('library_items').delete().eq('id', id);
-        if (!error) setItems(items.filter(item => item.id !== id));
+        if (!error) setItems(prev => prev.filter(item => item.id !== id));
     };
 
-    // --- RENDER LOGIC ---
-    if (!isUnlocked) {
-        return <LoginGate onUnlock={handleUnlock} />;
-    }
+    if (!isUnlocked) return <LoginGate onUnlock={handleUnlock} />;
 
     const categories = ['All', 'To Cook', 'To Watch', 'To Visit', 'To Read', 'To Listen'];
     const filteredItems = filter === 'All' ? items : items.filter(i => i.category === filter);
@@ -113,7 +111,6 @@ export default function Home() {
     return (
         <main className={`min-h-screen p-6 md:p-12 lg:p-24 film-grain transition-colors duration-1000 ${isEvening ? 'bg-[#2b2118] text-[#f4eee0]' : 'bg-[#f4eee0] text-[#2b2118]'}`}>
 
-            {/* Hearts Particles */}
             {hearts.map(heart => (
                 <span key={heart.id} className="heart-particle" style={{ left: '50%', top: '50%', '--x': heart.x, '--y': heart.y, '--r': `${heart.r}deg` } as any}>♥</span>
             ))}
@@ -162,17 +159,13 @@ export default function Home() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-16">
                     {filteredItems.map((item) => (
                         <div key={item.id} className="group relative">
-                            <a href={item.link} target="_blank">
+                            <a href={item.link} target="_blank" rel="noreferrer">
                                 <div className={`relative aspect-[3/4] border-[12px] shadow-xl mb-6 overflow-hidden transition-all duration-700 ${isEvening ? 'border-[#3d3126]' : 'border-white'}`}>
                                     <img
-                                        // 1. Uses her provided image URL
-                                        // 2. Fallback: Uses the specific logo for the category you defined above
-                                        // 3. Final Fallback: Uses a default logo if the category isn't found
                                         src={item.imageUrl || categoryLogos[item.category] || categoryLogos["Default"]}
                                         className="w-full h-full object-cover sepia-[15%] group-hover:sepia-0 transition-transform duration-1000 group-hover:scale-105"
                                         alt={item.title}
                                         onError={(e) => {
-                                            // If the link is broken, it replaces it with the category logo
                                             const target = e.target as HTMLImageElement;
                                             target.src = categoryLogos[item.category] || categoryLogos["Default"];
                                         }}
