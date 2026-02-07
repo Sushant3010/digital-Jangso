@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from 'react'; // Added useCallback
+import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { myItems as initialItems, LibraryItem } from './data';
 import LoginGate from './LoginGate';
@@ -7,6 +7,27 @@ import LoginGate from './LoginGate';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// --- VALENTINE CONFIGURATION ---
+const VALENTINE_WEEK = {
+    7: { name: "Rose Day", emoji: "🌹", msg: "A digital rose for the one who makes my life bloom." },
+    8: { name: "Propose Day", emoji: "💍", msg: "I'd choose you in every lifetime." },
+    9: { name: "Chocolate Day", emoji: "🍫", msg: "You're still the sweetest part of my day." },
+    10: { name: "Teddy Day", emoji: "🧸", msg: "A soft hug for you, always." },
+    11: { name: "Promise Day", emoji: "🤝", msg: "I promise to always be your safe place." },
+    12: { name: "Hug Day", emoji: "🫂", msg: "Sending you the warmest virtual squeeze." },
+    13: { name: "Kiss Day", emoji: "💋", msg: "Floating kisses coming your way." },
+    14: { name: "Valentine's Day", emoji: "💝", msg: "You are my favorite person, today and every day." }
+};
+
+const getValentineConfig = () => {
+    const now = new Date();
+    // February is month 1
+    if (now.getMonth() === 1 && now.getDate() >= 7 && now.getDate() <= 14) {
+        return VALENTINE_WEEK[now.getDate() as keyof typeof VALENTINE_WEEK];
+    }
+    return null;
+};
 
 const categoryLogos: Record<string, string> = {
     "To Cook": "https://images.unsplash.com/photo-1556910103-1c02745aae4d?q=80&w=400",
@@ -27,6 +48,10 @@ export default function Home() {
     const [clickCount, setClickCount] = useState(0);
     const [hearts, setHearts] = useState<{ id: number, x: number, y: number, r: number }[]>([]);
 
+    // Valentine State
+    const valentineConfig = getValentineConfig();
+    const [bgParticles, setBgParticles] = useState<{ id: number, x: number, duration: number, delay: number }[]>([]);
+
     const [newItem, setNewItem] = useState({
         title: '',
         category: 'To Watch' as LibraryItem['category'],
@@ -35,18 +60,13 @@ export default function Home() {
         note: ''
     });
 
-    // Wrapped in useCallback to prevent unnecessary re-renders
     const fetchItems = useCallback(async () => {
         const { data } = await supabase
             .from('library_items')
             .select('*')
             .order('created_at', { ascending: false });
 
-        const dbItems = data ? data.map(i => ({
-            ...i,
-            imageUrl: i.image_url // Map DB snake_case to your camelCase
-        })) : [];
-
+        const dbItems = data ? data.map(i => ({ ...i, imageUrl: i.image_url })) : [];
         setItems([...dbItems, ...initialItems]);
     }, []);
 
@@ -59,7 +79,18 @@ export default function Home() {
 
         const hour = new Date().getHours();
         if (hour >= 19 || hour <= 7) setIsEvening(true);
-    }, [fetchItems]);
+
+        // Initialize background particles if it's Valentine's week
+        if (valentineConfig) {
+            const particles = Array.from({ length: 20 }).map((_, i) => ({
+                id: i,
+                x: Math.random() * 100,
+                duration: 10 + Math.random() * 10,
+                delay: Math.random() * -20 // Start mid-animation for instant fill
+            }));
+            setBgParticles(particles);
+        }
+    }, [fetchItems, valentineConfig]);
 
     const handleUnlock = () => {
         sessionStorage.setItem('jangso_unlocked', 'true');
@@ -84,7 +115,7 @@ export default function Home() {
             title: newItem.title,
             category: newItem.category,
             link: newItem.link,
-            image_url: newItem.imageUrl, // Send to DB
+            image_url: newItem.imageUrl,
             note: newItem.note
         }]).select();
 
@@ -109,15 +140,44 @@ export default function Home() {
     const filteredItems = filter === 'All' ? items : items.filter(i => i.category === filter);
 
     return (
-        <main className={`min-h-screen p-6 md:p-12 lg:p-24 film-grain transition-colors duration-1000 ${isEvening ? 'bg-[#2b2118] text-[#f4eee0]' : 'bg-[#f4eee0] text-[#2b2118]'}`}>
+        <main className={`min-h-screen p-6 md:p-12 lg:p-24 film-grain transition-colors duration-1000 
+            ${valentineConfig?.name === "Chocolate Day" ? 'bg-[#3d2b1f] text-[#f5e6d3]' :
+                isEvening ? 'bg-[#2b2118] text-[#f4eee0]' : 'bg-[#f4eee0] text-[#2b2118]'}`}>
 
-            {hearts.map(heart => (
-                <span key={heart.id} className="heart-particle" style={{ left: '50%', top: '50%', '--x': heart.x, '--y': heart.y, '--r': `${heart.r}deg` } as any}>♥</span>
+            {/* CONTINUOUS FALLING PARTICLES */}
+            {valentineConfig && bgParticles.map(p => (
+                <span
+                    key={p.id}
+                    className="falling-emoji"
+                    style={{
+                        left: `${p.x}%`,
+                        animationDuration: `${p.duration}s`,
+                        animationDelay: `${p.delay}s`
+                    }}
+                >
+                    {valentineConfig.emoji}
+                </span>
             ))}
 
-            <div className="max-w-6xl mx-auto">
+            {/* INTERACTIVE BURST PARTICLES */}
+            {hearts.map(heart => (
+                <span key={heart.id} className="heart-particle" style={{ left: '50%', top: '50%', '--x': heart.x, '--y': heart.y, '--r': `${heart.r}deg` } as any}>
+                    {valentineConfig ? valentineConfig.emoji : '♥'}
+                </span>
+            ))}
+
+            <div className="max-w-6xl mx-auto relative z-10">
+                {/* DAILY VALENTINE BANNER */}
+                {valentineConfig && (
+                    <div className="text-center mb-12 animate-in fade-in slide-in-from-top duration-1000">
+                        <p className="text-[10px] uppercase tracking-[0.5em] font-bold opacity-40">Happy {valentineConfig.name}</p>
+                        <h2 className="font-serif italic text-2xl mt-2">"{valentineConfig.msg}"</h2>
+                    </div>
+                )}
+
                 <header className="flex justify-between items-end border-b border-current pb-8 mb-12">
                     <div className="cursor-pointer select-none" onClick={() => {
+                        triggerHearts(); // Trigger emojis on title click
                         setClickCount(prev => prev + 1);
                         if (clickCount + 1 === 3) { setShowSecret(true); setClickCount(0); }
                     }}>
@@ -129,6 +189,9 @@ export default function Home() {
                     </button>
                 </header>
 
+                {/* ... (Form, Nav, and Grid sections remain identical to your previous code) ... */}
+
+                {/* Ensure your nav and items mapping use the existing logic from your code */}
                 {isFormOpen && (
                     <section className={`mb-16 p-8 md:p-12 border border-current rounded-xl animate-in slide-in-from-top duration-500 ${isEvening ? 'bg-[#3d3126]' : 'bg-[#fffcf2]'}`}>
                         <form onSubmit={addItem} className="grid gap-8">
