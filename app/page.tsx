@@ -8,7 +8,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// --- VALENTINE CONFIGURATION ---
+// --- VALENTINE CONFIGURATION --- 
 const VALENTINE_WEEK = {
     7: { name: "Rose Day", emoji: "🌹", msg: "A digital rose for the one who makes my life bloom." },
     8: { name: "Propose Day", emoji: "💍", msg: "I'd choose you in every lifetime." },
